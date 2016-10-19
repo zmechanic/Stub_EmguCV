@@ -8,8 +8,10 @@ namespace Stub_EmguCV
     {
         private readonly Mat _mat;
 
-        private Image<Rgb, byte> _rgbImage;
         private Image<Bgr, byte> _bgrImage;
+        private Image<Hsv, byte> _hsvImage;
+        private Image<Hls, byte> _hlsImage;
+        private Image<Rgb, byte> _rgbImage;
 
         private Image<Gray, byte> _grayscaleImage;
         
@@ -31,44 +33,11 @@ namespace Stub_EmguCV
             _mat = mat;
         }
 
-        public Image<Gray, byte> GrayscaleImage
-        {
-            get
-            {
-                if (_grayscaleImage == null)
-                {
-                    _grayscaleImage = BgrImage.Convert<Gray, byte>();
-                }
-
-                return _grayscaleImage;
-            }
-        }
-
-        public Image<Bgr, byte> BgrImage
-        {
-            get
-            {
-                if (_bgrImage == null)
-                {
-                    _bgrImage = _mat.ToImage<Bgr, byte>();
-                }
-
-                return _bgrImage;
-            }
-        }
-
-        public Image<Rgb, byte> RgbImage
-        {
-            get
-            {
-                if (_rgbImage == null)
-                {
-                    _rgbImage = _mat.ToImage<Rgb, byte>();
-                }
-
-                return _rgbImage;
-            }
-        }
+        public Image<Bgr, byte> BgrImage => _bgrImage ?? (_bgrImage = _mat.ToImage<Bgr, byte>());
+        public Image<Hsv, byte> HsvImage => _hsvImage ?? (_hsvImage = BgrImage.Convert<Hsv, byte>());
+        public Image<Hls, byte> HlsImage => _hlsImage ?? (_hlsImage = BgrImage.Convert<Hls, byte>());
+        public Image<Rgb, byte> RgbImage => _rgbImage ?? (_rgbImage = BgrImage.Convert<Rgb, byte>());
+        public Image<Gray, byte> GrayscaleImage => _grayscaleImage ?? (_grayscaleImage = BgrImage.Convert<Gray, byte>());
 
         public Image<Gray, byte> ChannelR
         {
@@ -109,53 +78,12 @@ namespace Stub_EmguCV
             }
         }
 
-        public Image<Gray, byte> ChannelRMinusB
-        {
-            get
-            {
-                return _channelRMinusB ?? (_channelRMinusB = ChannelR - ChannelB);
-            }
-        }
-
-        public Image<Gray, byte> ChannelRMinusG
-        {
-            get
-            {
-                return _channelRMinusG ?? (_channelRMinusG = ChannelR - ChannelG);
-            }
-        }
-
-        public Image<Gray, byte> ChannelGMinusB
-        {
-            get
-            {
-                return _channelGMinusB ?? (_channelGMinusB = ChannelG - ChannelB);
-            }
-        }
-
-        public Image<Gray, byte> ChannelGMinusR
-        {
-            get
-            {
-                return _channelGMinusR ?? (_channelGMinusR = ChannelG - ChannelR);
-            }
-        }
-
-        public Image<Gray, byte> ChannelBMinusR
-        {
-            get
-            {
-                return _channelBMinusR ?? (_channelBMinusR = ChannelB - ChannelR);
-            }
-        }
-
-        public Image<Gray, byte> ChannelBMinusG
-        {
-            get
-            {
-                return _channelBMinusG ?? (_channelBMinusG = ChannelB - ChannelG);
-            }
-        }
+        public Image<Gray, byte> ChannelRMinusB => _channelRMinusB ?? (_channelRMinusB = ChannelR - ChannelB);
+        public Image<Gray, byte> ChannelRMinusG => _channelRMinusG ?? (_channelRMinusG = ChannelR - ChannelG);
+        public Image<Gray, byte> ChannelGMinusB => _channelGMinusB ?? (_channelGMinusB = ChannelG - ChannelB);
+        public Image<Gray, byte> ChannelGMinusR => _channelGMinusR ?? (_channelGMinusR = ChannelG - ChannelR);
+        public Image<Gray, byte> ChannelBMinusR => _channelBMinusR ?? (_channelBMinusR = ChannelB - ChannelR);
+        public Image<Gray, byte> ChannelBMinusG => _channelBMinusG ?? (_channelBMinusG = ChannelB - ChannelG);
 
         public Image<Gray, byte> IsolateColorBlack(double threshold = 80)
         {
@@ -253,6 +181,8 @@ namespace Stub_EmguCV
             if (disposing)
             {
                 _bgrImage?.Dispose();
+                _hsvImage?.Dispose();
+                _hlsImage?.Dispose();
                 _rgbImage?.Dispose();
                 _grayscaleImage?.Dispose();
 
@@ -267,6 +197,6 @@ namespace Stub_EmguCV
                 _channelBMinusR?.Dispose();
                 _channelBMinusG?.Dispose();
             }
-}
+        }
     }
 }

@@ -39,7 +39,7 @@ namespace Stub_EmguCV
         /// <returns>
         /// New image clipped by rectangular area and normalized to take entire space of <paramref name="targetImageSize"/>.
         /// </returns>
-        public static Mat GetAxisAlignedImagePart<TColor, TDepth>(
+        public static Image<TColor, TDepth> GetAxisAlignedImagePart<TColor, TDepth>(
             this Image<TColor, TDepth> input,
             Quadrilateral rectSrc,
             Quadrilateral rectDst,
@@ -50,10 +50,14 @@ namespace Stub_EmguCV
             var src = new[] { rectSrc.P0, rectSrc.P1, rectSrc.P2, rectSrc.P3 };
             var dst = new[] { rectDst.P0, rectDst.P1, rectDst.P2, rectDst.P3 };
 
-            var matrix = CvInvoke.GetPerspectiveTransform(src, dst);
-            var cutImagePortion = new Mat();
-            CvInvoke.WarpPerspective(input, cutImagePortion, matrix, targetImageSize, Inter.Cubic);
-            return cutImagePortion;
+            using (var matrix = CvInvoke.GetPerspectiveTransform(src, dst))
+            {
+                using (var cutImagePortion = new Mat())
+                {
+                    CvInvoke.WarpPerspective(input, cutImagePortion, matrix, targetImageSize, Inter.Cubic);
+                    return cutImagePortion.ToImage<TColor, TDepth>();
+                }
+            }
         }
 
         /// <summary>
@@ -127,7 +131,7 @@ namespace Stub_EmguCV
         }
 
         /// <summary>
-        /// Finds rectangles in image.
+        /// Finds rectangles in image. The image will be cloned internally and content will not change.
         /// </summary>
         /// <param name="input">
         /// The input image.
@@ -139,6 +143,30 @@ namespace Stub_EmguCV
         /// List of detected rectangles.
         /// </returns>
         public static Quadrilateral[] FindRectangles<TColor, TDepth>(
+            this Image<TColor, TDepth> input,
+            double minRectangleArea)
+            where TColor : struct, IColor
+            where TDepth : new()
+        {
+            using (var temp = input.Clone())
+            {
+                return FindRectanglesDestructive(temp, minRectangleArea);
+            }
+        }
+
+        /// <summary>
+        /// Finds rectangles in image. The image content will change.
+        /// </summary>
+        /// <param name="input">
+        /// The input image.
+        /// </param>
+        /// <param name="minRectangleArea">
+        /// Minimum area of rectangle to be recognized as valid.
+        /// </param>
+        /// <returns>
+        /// List of detected rectangles.
+        /// </returns>
+        public static Quadrilateral[] FindRectanglesDestructive<TColor, TDepth>(
             this Image<TColor, TDepth> input,
             double minRectangleArea)
             where TColor : struct, IColor

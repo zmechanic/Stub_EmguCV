@@ -8,7 +8,7 @@ namespace Stub_EmguCV
     /// </summary>
     public struct Quadrilateral : IShape
     {
-        private PointF[] _points;
+        private readonly PointF[] _points;
 
         /// <summary>
         /// Constructs a new instance of <see cref="Quadrilateral"/>.
@@ -35,45 +35,22 @@ namespace Stub_EmguCV
         {
         }
 
-        public PointF P0
-        {
-            get { return _points[0]; }
-        }
+        public bool IsEmpty => _points == null;
 
-        public PointF P1
-        {
-            get { return _points[1]; }
-        }
+        public PointF P0 => _points[0];
+        public PointF P1 => _points[1];
+        public PointF P2 => _points[2];
+        public PointF P3 => _points[3];
 
-        public PointF P2
-        {
-            get { return _points[2]; }
-        }
+        public PointF[] Points => _points;
+        public Rectangle BoundingBoxInt => Rectangle.FromLTRB((int)MinX, (int)MinY, (int)MaxX, (int)MaxY);
+        public RectangleF BoundingBox => RectangleF.FromLTRB(MinX, MinY, MaxX, MaxY);
+        public float BoundingBoxArea => BoundingBox.Width * BoundingBox.Height;
 
-        public PointF P3
-        {
-            get { return _points[3]; }
-        }
-
-        public PointF[] Points
-        {
-            get { return _points; }
-        }
-
-        public Rectangle BoundingBoxInt
-        {
-            get { return Rectangle.FromLTRB((int)MinX, (int)MinY, (int)MaxX, (int)MaxY); }
-        }
-
-        public RectangleF BoundingBox
-        {
-            get { return RectangleF.FromLTRB(MinX, MinY, MaxX, MaxY); }
-        }
-
-        public float BoundingBoxArea
-        {
-            get { return BoundingBox.Width * BoundingBox.Height; }
-        }
+        public float MinX => Math.Min(Math.Min(Math.Min(P0.X, P1.X), P2.X), P3.X);
+        public float MinY => Math.Min(Math.Min(Math.Min(P0.Y, P1.Y), P2.Y), P3.Y);
+        public float MaxX => Math.Max(Math.Max(Math.Max(P0.X, P1.X), P2.X), P3.X);
+        public float MaxY => Math.Max(Math.Max(Math.Max(P0.Y, P1.Y), P2.Y), P3.Y);
 
         public float Width
         {
@@ -98,38 +75,6 @@ namespace Stub_EmguCV
                 var y30 = Math.Abs(P3.Y - P0.Y);
 
                 return Math.Max(Math.Max(Math.Max(y01, y12), y23), y30);
-            }
-        }
-
-        public float MinX
-        {
-            get
-            {
-                return Math.Min(Math.Min(Math.Min(P0.X, P1.X), P2.X), P3.X);
-            }
-        }
-
-        public float MinY
-        {
-            get
-            {
-                return Math.Min(Math.Min(Math.Min(P0.Y, P1.Y), P2.Y), P3.Y);
-            }
-        }
-
-        public float MaxX
-        {
-            get
-            {
-                return Math.Max(Math.Max(Math.Max(P0.X, P1.X), P2.X), P3.X);
-            }
-        }
-
-        public float MaxY
-        {
-            get
-            {
-                return Math.Max(Math.Max(Math.Max(P0.Y, P1.Y), P2.Y), P3.Y);
             }
         }
     }

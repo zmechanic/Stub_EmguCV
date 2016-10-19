@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
@@ -21,6 +20,7 @@ namespace Stub_EmguCV
         private Capture _capture;
 
         private Image<Gray, byte> _scaledDownFrameOneColorImagePrev;
+        private Image<Gray, byte> _storedImage;
 
         public Form1()
         {
@@ -56,9 +56,13 @@ namespace Stub_EmguCV
         {
             using (var frame = new Mat())
             {
-                ((Capture)sender).Retrieve(frame);
+                ((Capture) sender).Retrieve(frame);
 
-                FindTags(frame);
+                //DetectCircles(frame);
+
+                CalculateColorInFrameCenter(frame);
+
+                //FindTags(frame);
 
                 //Process(frame);
             }
@@ -66,97 +70,280 @@ namespace Stub_EmguCV
 
         private void FindTags(Mat frame)
         {
+            Debug.WriteLine("");
+
             using (var frameImage = frame.ToPipelineImage())
             {
-                //var imageRGB = frameImage.RgbImage.Clone();
+                var imageRGB = frameImage.RgbImage.Clone();
 
-                //var cropImageSize = new Size(128, 128);
-                //var detectSubrectArea = 25 * ((cropImageSize.Width * cropImageSize.Height) / (64 * 64));
-                //var tagDetector = new TagDetector(cropImageSize);
-                //var frameOneColorImageFiltered = frameImage.IsolateColorBlack(100);
-                //var rects = frameOneColorImageFiltered.Clone().FindRectangles(1000);
+                var cropImageSize = new Size(128, 128);
+                var detectSubrectArea = 25 * ((cropImageSize.Width * cropImageSize.Height) / (64 * 64));
+                var tagDetector = new TagDetector(cropImageSize);
+                var frameOneColorImageFiltered = frameImage.IsolateColorBlack(100);
+                var rects = frameOneColorImageFiltered.Clone().FindRectangles(1000);
 
-                //foreach (var rect in rects.OrderByDescending(_ => _.BoundingBoxArea))
-                //{
-                //    var rectBoundingBox = rect.BoundingBox;
+                foreach (var rect in rects.OrderByDescending(_ => _.BoundingBoxArea))
+                {
+                    var rectBoundingBox = rect.BoundingBox;
 
-                //    // Ignore largest rectangles detected at the edge of image due to contrasting area.
-                //    if (rectBoundingBox.Left < 5 || rectBoundingBox.Top < 5 ||
-                //        rectBoundingBox.Right > frameOneColorImageFiltered.Width - 5 || rectBoundingBox.Bottom > frameOneColorImageFiltered.Height - 5)
-                //    {
-                //        continue;
-                //    }
+                    // Ignore largest rectangles detected at the edge of image due to contrasting area.
+                    if (rectBoundingBox.Left < 5 || rectBoundingBox.Top < 5 ||
+                        rectBoundingBox.Right > frameOneColorImageFiltered.Width - 5 || rectBoundingBox.Bottom > frameOneColorImageFiltered.Height - 5)
+                    {
+                        continue;
+                    }
 
-                //    var hasLargeInnerRect = false;
+                    // Attempt to detect if there is large inner rectangle. It may only indicate inner boundary of tag,
+                    // otherwise it's presence will render tag unusable.
+                    var hasLargeInnerRect = false;
 
-                //    foreach (var otherRect in rects)
-                //    {
-                //        if (otherRect.Equals(rect))
-                //        {
-                //            continue;
-                //        }
+                    // ReSharper disable once LoopCanBeConvertedToQuery
+                    foreach (var otherRect in rects)
+                    {
+                        if (otherRect.Equals(rect))
+                        {
+                            continue;
+                        }
 
-                //        var otherRectBoundingBox = otherRect.BoundingBox;
-                //        if (rectBoundingBox.Contains(otherRectBoundingBox))
-                //        {
-                //            if ((otherRectBoundingBox.Width * otherRectBoundingBox.Height) / (rectBoundingBox.Width * rectBoundingBox.Height) > 0.7)
-                //            {
-                //                hasLargeInnerRect = true;
-                //                break;
-                //            }
-                //        }
-                //    }
+                        var otherRectBoundingBox = otherRect.BoundingBox;
+                        if (rectBoundingBox.Contains(otherRectBoundingBox))
+                        {
+                            if ((otherRectBoundingBox.Width * otherRectBoundingBox.Height) / (rectBoundingBox.Width * rectBoundingBox.Height) > 0.7)
+                            {
+                                hasLargeInnerRect = true;
+                                break;
+                            }
+                        }
+                    }
 
-                //    if (hasLargeInnerRect)
-                //    {
-                //        continue;
-                //    }
+                    // Skip current rectangle if we have detected a large ineer rectangle.
+                    if (hasLargeInnerRect)
+                    {
+                        continue;
+                    }
 
-                //    imageRGB.Draw(rect.BoundingBoxInt, new Rgb(255, 0, 0));
+                    imageRGB.Draw(rect.BoundingBoxInt, new Rgb(255, 0, 0));
 
-                //    // Extract image part defined by rectangle and normalize it so it's axis aligned.
-                //    var rectImage = frameOneColorImageFiltered
-                //        .GetAxisAlignedImagePart(
-                //            rect,
-                //            new Quadrilateral(new PointF(0, 0), new PointF(0, cropImageSize.Height), new PointF(cropImageSize.Width, cropImageSize.Height), new PointF(cropImageSize.Width, 0)),
-                //            cropImageSize)
-                //        .ToImage<Gray, byte>();
+                    // Extract image part defined by rectangle and normalize it so it's axis aligned.
+                    using (var rectImage = frameOneColorImageFiltered
+                        .GetAxisAlignedImagePart(
+                            rect,
+                            new Quadrilateral(new PointF(0, 0), new PointF(0, cropImageSize.Height), new PointF(cropImageSize.Width, cropImageSize.Height), new PointF(cropImageSize.Width, 0)),
+                            cropImageSize))
+                    {
+                        _viewers[1].Image = rectImage;
 
-                //    _viewers[1].Image = rectImage;
+                        // Find rectangles within cropped image.
+                        var detectedSubrects = rectImage.FindRectangles(detectSubrectArea);
 
-                //    // Find rectangles within cropped image.
-                //    var detectedSubrects = rectImage.Clone().FindRectangles(detectSubrectArea);
+                        // We must have at least two rectangles to proceed with tag detection.
+                        if (detectedSubrects.Length >= 2)
+                        {
+                            for (var cornerIndex = 0; cornerIndex < 4; cornerIndex++)
+                            {
+                                imageRGB.Draw(cornerIndex.ToString(), new Point((int)rect.Points[cornerIndex].X, (int)rect.Points[cornerIndex].Y), FontFace.HersheyPlain, 1.5D, new Rgb(Color.SpringGreen), 2);
+                                imageRGB.Draw(new CircleF(new PointF(rect.Points[cornerIndex].X, rect.Points[cornerIndex].Y), 5), new Rgb(Color.Magenta), 2);
+                            }
 
-                //    // We must have at least two rectangles to proceed with tag detection.
-                //    if (detectedSubrects.Length >= 2)
-                //    {
-                //        for (var cornerIndex = 0; cornerIndex < 4; cornerIndex++)
-                //        {
-                //            imageRGB.Draw(cornerIndex.ToString(), new Point((int)rect.Points[cornerIndex].X, (int)rect.Points[cornerIndex].Y), FontFace.HersheyPlain, 1.5D, new Rgb(Color.SpringGreen), 2);
-                //            imageRGB.Draw(new CircleF(new PointF(rect.Points[cornerIndex].X, rect.Points[cornerIndex].Y), 5), new Rgb(Color.Magenta), 2);
-                //        }
+                            // Check if cropped image contains a tag markers.
+                            var tagDetectionResult = tagDetector.IsTag(detectedSubrects, rect);
+                            if (tagDetectionResult.IsTagPresent)
+                            {
+                                Debug.WriteLine("{0} ||| {1} ||| X={2},Y={3}", tagDetectionResult.RotationAngle, tagDetectionResult.Confidence, rect.MinX, rect.MinY);
 
-                //        // Check if cropped image contains a tag markers.
-                //        var tagDetectionResult = tagDetector.IsTag(detectedSubrects, rect);
-                //        if (tagDetectionResult.IsTagPresent)
-                //        {
-                //            Debug.WriteLine("{0} ||| {1} ||| {2}", tagDetectionResult.RotationAngle, tagDetectionResult.ImageRotation, tagDetectionResult.IsFlippedHorizontally);
+                                using (var normalizedTagImage = tagDetector.NormalizeTagImage(rectImage, tagDetectionResult, true, true))
+                                {
+                                    if (_storedImage == null)
+                                    {
+                                        _storedImage = normalizedTagImage.Copy(new Rectangle(5, 5, normalizedTagImage.Width - 10, normalizedTagImage.Height - 10));
+                                    }
 
-                //            // Rotate/flip cropped image so that it always upright and correctly left-to-right oriented.
-                //            var normalizedTagImage = rectImage.Rotate(tagDetectionResult.ImageRotation * 90, new Gray());
-                //            if (tagDetectionResult.IsFlippedHorizontally)
-                //            {
-                //                normalizedTagImage = normalizedTagImage.Flip(FlipType.Horizontal);
-                //            }
+                                    using (var matchResult = normalizedTagImage.MatchTemplate(_storedImage, TemplateMatchingType.CcoeffNormed))
+                                    {
+                                        double[] minValues, maxValues;
+                                        Point[] minLocations, maxLocations;
+                                        matchResult.MinMax(out minValues, out maxValues, out minLocations, out maxLocations);
 
-                //            _viewers[2].Image = normalizedTagImage;
-                //        }
-                //    }
-                //}
+                                        if (maxValues[0] > 0.8)
+                                        {
+                                            Debug.WriteLine("!!!!!!!!!!!!!!! {0}    {1}", maxValues[0], maxLocations[0]);
+                                        }
+                                    }
 
-                //_viewers[0].Image = imageRGB;
+                                    //Debug.WriteLine(normalizedTagImage.GetSubRect(new Rectangle(0, 0, cropImageSize.Width, 5)).CountNonzero()[0]);
 
-                //imageRGB.Dispose();
+                                    //normalizedTagImage.Draw(new Rectangle(0, 0, (int)(cropImageSize.Width * 0.2), (int)(cropImageSize.Height * 0.2)), new Gray(255), -1);
+
+                                    _viewers[2].Image = normalizedTagImage;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                _viewers[0].Image = imageRGB;
+
+                imageRGB.Dispose();
+            }
+        }
+
+        private void CalculateColorInFrameCenter(Mat frame)
+        {
+            using (var frameImage = frame.ToPipelineImage())
+            {
+                Rgb averageColor;
+
+                using (var roiImage =
+                    frameImage.RgbImage.Copy(
+                        new Rectangle((frameImage.RgbImage.Width / 2) - 20, (frameImage.RgbImage.Height / 2) - 20, 40, 40)))
+                {
+                    averageColor = roiImage.GetAverage();
+                }
+
+                var unitR = averageColor.Red / 255;
+                var unitG = averageColor.Green / 255;
+                var unitB = averageColor.Blue / 255;
+                var minChannelValue = Math.Min(unitR, Math.Min(unitG, unitB));
+                var maxChannelValue = Math.Max(unitR, Math.Max(unitG, unitB));
+                var delta = maxChannelValue - minChannelValue;
+                var normalizedR = unitR / maxChannelValue;
+                var normalizedG = unitG / maxChannelValue;
+                var normalizedB = unitB / maxChannelValue;
+                var brightness =
+                    Math.Sqrt(0.299 * (unitR * unitR) +
+                              0.587 * (unitG * unitG) +
+                              0.114 * (unitB * unitB));
+
+                // Monochromatic color
+                if (1D - normalizedR < 0.15 &&
+                    1D - normalizedG < 0.15 &&
+                    1D - normalizedB < 0.15)
+                {
+                    if (brightness < 0.45)
+                    {
+                        Console.WriteLine("black");
+                    }
+                    else if (brightness > 0.65)
+                    {
+                        Console.WriteLine("white");
+                    }
+                    else
+                    {
+                        Console.WriteLine("gray");
+                    }
+                }
+                else
+                {
+                    double hue;
+
+                    if (Math.Abs(unitR - maxChannelValue) < 0.01)
+                    {
+                        // between yellow & magenta
+                        hue = (unitG - unitB) / delta;
+                    }
+                    else if (Math.Abs(unitG - maxChannelValue) < 0.01)
+                    {
+                        // between cyan & yellow
+                        hue = 2 + (unitB - unitR) / delta;
+                    }
+                    else
+                    {
+                        // between magenta & cyan
+                        hue = 4 + (unitR - unitG) / delta;
+                    }
+
+                    // convert to degrees
+                    hue *= 60;
+                    if (hue < 0)
+                    {
+                        hue += 360;
+                    }
+
+                    if (hue >= 330)
+                    {
+                        Console.WriteLine("red");
+                    }
+                    else if (hue >= 285)
+                    {
+                        Console.WriteLine("magenta");
+                    }
+                    else if (hue >= 260)
+                    {
+                        Console.WriteLine("violet");
+                    }
+                    else if (hue >= 190)
+                    {
+                        Console.WriteLine("blue");
+                    }
+                    else if (hue >= 170)
+                    {
+                        Console.WriteLine("cyan");
+                    }
+                    else if (hue >= 90)
+                    {
+                        Console.WriteLine("green");
+                    }
+                    else if (hue >= 45)
+                    {
+                        Console.WriteLine("yellow");
+                    }
+                    else if (hue >= 30)
+                    {
+                        Console.WriteLine("orange");
+                    }
+                    else
+                    {
+                        Console.WriteLine("red");
+                    }
+
+                    Console.WriteLine("hue {0}", hue);
+                }
+
+                frameImage.RgbImage.Draw(
+                    new Rectangle((frameImage.RgbImage.Width / 2) - 20, (frameImage.RgbImage.Height / 2) - 20, 40, 40),
+                    new Rgb(255, 255, 255));
+
+                //Console.WriteLine("{0} {1} {2}", (int)averageColor.Red, (int)averageColor.Green, (int)averageColor.Blue);
+                //Console.WriteLine("{0} {1} {2} {3}", brightness, normalizedR, normalizedG, normalizedB);
+
+                _viewers[0].Image = frameImage.RgbImage;
+            }
+        }
+
+        private void DetectCircles(Mat frame)
+        {
+            using (var frameImage = frame.ToPipelineImage())
+            {
+                var colorSeparated = frameImage.HsvImage.InRange(new Hsv(240 / 2f, 0, 80), new Hsv(320 / 2f, 120, 255));
+
+                var img = colorSeparated.Clone();
+
+                img = img.Dilate(3);
+                img = img.Erode(3);
+                img = img.SmoothGaussian(5);
+                img = img.Erode(3);
+                img = img.Dilate(3);
+
+                img = img.InRange(new Gray(120), new Gray(255));
+
+                var circleses = img.HoughCircles(new Gray(150), new Gray(50), 2.2, 50, 15, 120);
+
+                var testImage = frameImage.BgrImage.Clone();
+
+                foreach (var circles in circleses)
+                {
+                    foreach (var circle in circles)
+                    {
+                        testImage.Draw(circle, new Bgr(255, 255, 0), 3);
+                    }
+                }
+
+                _viewers[0].Image = testImage;
+                _viewers[1].Image = img;
+
+                testImage.Dispose();
+                colorSeparated.Dispose();
+                img.Dispose();
             }
         }
 
@@ -425,6 +612,7 @@ namespace Stub_EmguCV
             _scaledDownFrameOneColorImagePrev = scaledDownFrameOneColorImage;
 
 
+
             //var featuresDetector = new Emgu.CV.Features2D.GFTTDetector();
             //var kp = featuresDetector.Detect(frameOneColorImage);
             //foreach (var keyPoint in kp)
@@ -436,91 +624,8 @@ namespace Stub_EmguCV
             //yellow1.CornerHarris(yellow1, cornerImage, 11, 11, 0.05, BorderType.Reflect);
             //cornerImage = cornerImage.ThresholdBinary(new Gray(0.005), new Gray(255));
 
-            var cropImageSize = new Size(128, 128);
-            var detectSubrectArea = 25 * ((cropImageSize.Width * cropImageSize.Height) / (64 * 64));
-            var tagDetector = new TagDetector(cropImageSize);
-            var frameOneColorImageFiltered = frameImage.IsolateColorBlack(100);
-            var rects = frameOneColorImageFiltered.Clone().FindRectangles(1000);
 
-            foreach (var rect in rects.OrderByDescending(_ => _.BoundingBoxArea))
-            {
-                var rectBoundingBox = rect.BoundingBox;
 
-                // Ignore largest rectangles detected at the edge of image due to contrasting area.
-                if (rectBoundingBox.Left < 5 || rectBoundingBox.Top < 5 ||
-                    rectBoundingBox.Right > frameOneColorImageFiltered.Width - 5 || rectBoundingBox.Bottom > frameOneColorImageFiltered.Height - 5)
-                {
-                    continue;
-                }
-
-                var hasLargeInnerRect = false;
-
-                foreach (var otherRect in rects)
-                {
-                    if (otherRect.Equals(rect))
-                    {
-                        continue;
-                    }
-
-                    var otherRectBoundingBox = otherRect.BoundingBox;
-                    if (rectBoundingBox.Contains(otherRectBoundingBox))
-                    {
-                        if ((otherRectBoundingBox.Width * otherRectBoundingBox.Height) / (rectBoundingBox.Width * rectBoundingBox.Height) > 0.7)
-                        {
-                            hasLargeInnerRect = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (hasLargeInnerRect)
-                {
-                    continue;
-                }
-
-                imageRGB.Draw(rect.BoundingBoxInt, new Rgb(255, 0, 0));
-
-                // Extract image part defined by rectangle and normalize it so it's axis aligned.
-                var rectImage = frameOneColorImageFiltered
-                    .GetAxisAlignedImagePart(
-                        rect,
-                        new Quadrilateral(new PointF(0, 0), new PointF(0, cropImageSize.Height), new PointF(cropImageSize.Width, cropImageSize.Height), new PointF(cropImageSize.Width, 0)),
-                        cropImageSize)
-                    .ToImage<Gray, byte>();
-
-                _viewers[1].Image = rectImage;
-
-                // Find rectangles within cropped image.
-                var detectedSubrects = rectImage.Clone().FindRectangles(detectSubrectArea);
-
-                // We must have at least two rectangles to proceed with tag detection.
-                if (detectedSubrects.Length >= 2)
-                {
-                    for (var cornerIndex = 0; cornerIndex < 4; cornerIndex++)
-                    {
-                        imageRGB.Draw(cornerIndex.ToString(), new Point((int)rect.Points[cornerIndex].X, (int)rect.Points[cornerIndex].Y), FontFace.HersheyPlain, 1.5D, new Rgb(Color.SpringGreen), 2);
-                        imageRGB.Draw(new CircleF(new PointF(rect.Points[cornerIndex].X, rect.Points[cornerIndex].Y), 5), new Rgb(Color.Magenta), 2);
-                    }
-
-                    // Check if cropped image contains a tag markers.
-                    var tagDetectionResult = tagDetector.IsTag(detectedSubrects, rect);
-                    if (tagDetectionResult.IsTagPresent)
-                    {
-                        Debug.WriteLine("{0} ||| {1} ||| {2}", tagDetectionResult.RotationAngle, tagDetectionResult.ImageRotation, tagDetectionResult.IsFlippedHorizontally);
-
-                        // Rotate/flip cropped image so that it always upright and correctly left-to-right oriented.
-                        var normalizedTagImage = rectImage.Rotate(tagDetectionResult.ImageRotation * 90, new Gray());
-                        if (tagDetectionResult.IsFlippedHorizontally)
-                        {
-                            normalizedTagImage = normalizedTagImage.Flip(FlipType.Horizontal);
-                        }
-
-                        _viewers[2].Image = normalizedTagImage;
-                    }
-                }
-            }
-
-            _viewers[0].Image = imageRGB;
             //_viewers[1].Image = frameOneColorImageFiltered;
 
             //for (var i = 0; i < 3; i++)
